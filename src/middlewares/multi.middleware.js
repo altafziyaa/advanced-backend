@@ -31,12 +31,35 @@ const isAdmin = (req, res, next) => {
 };
 
 const globalErrorMiddleware = (err, req, res, next) => {
-  const status = err.statusCode || 500;
+  let error = err;
 
-  res.status(status).json({
+  // MongoDB errors
+  if (error.name === "CastError") {
+    error = new CustomError("Invalid ID format", 400);
+  }
+
+  if (error.code === 11000) {
+    const field = Object.keys(error.keyValue)[0];
+    error = new CustomError(`${field} already exists`, 409);
+  }
+
+  if (error.name === "ValidationError") {
+    const messages = Object.values(error.errors).map((e) => e.message);
+    error = new CustomError(messages.join(", "), 400);
+  }
+
+  // JWT errors
+  if (error.name === "JsonWebTokenError") {
+    error = new CustomError("Invalid token", 401);
+  }
+
+  if (error.name === "TokenExpiredError") {
+    error = new CustomError("Token expired, please login again", 401);
+  }
+
+  res.status(error.statusCode || 500).json({
     success: false,
-    status: err.status || "error",
-    message: err.message || "Something went wrong",
+    message: error.isOperational ? error.message : "Something went wrong",
   });
 };
 
